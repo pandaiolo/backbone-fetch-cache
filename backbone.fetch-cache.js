@@ -106,17 +106,40 @@
       expires = (new Date()).getTime() + ((opts.expires || 5 * 60) * 1000);
     }
 
-    Backbone.fetchCache._cache[key] = {
-      expires: expires,
-      value: attrs
-    };
+    if (Backbone.fetchCache.cacheModels && instance instanceof Backbone.Collection) {
+        var keys = [];
+        instance.each(_.bind(function(model) {
+            Backbone.fetchCache.setCache(model, opts, model.attributes);
+            keys.push(Backbone.fetchCache.getCacheKey(model, this.opts));
+        }, this));
+        Backbone.fetchCache._cache[key] = {
+          expires: expires,
+          value: keys,
+          isModel: false
+        };
+    } else {
+        Backbone.fetchCache._cache[key] = {
+          expires: expires,
+          value: attrs,
+          model: instance instanceof Backbone.Model
+        };
+    }
 
     Backbone.fetchCache.setLocalStorage();
   }
 
-  function clearItem(key) {
+  function clearItem(key, expiry) {
     if (_.isFunction(key)) { key = key(); }
-    delete Backbone.fetchCache._cache[key];
+    // If collection models are stored, remove those with same expiry 
+    // as collection (other may have been updated individually)
+    if (Backbone.fetchCache.cacheModels && ! Backbone.fetchCache._cache[key].isModel) {
+        _.each(Backbone.fetchCache._cache[key].value, function(modelKey) {
+            Backbone.fetchCache.clearItem(modelKey, Backbone.fetchCache._cache[key].expiry);
+        });
+    }
+    if (_.isUndefined(expiry) || Backbone.fetchCache._cache[key].expiry == expiry) { 
+        delete Backbone.fetchCache._cache[key];
+    }
     Backbone.fetchCache.setLocalStorage();
   }
 
@@ -225,6 +248,9 @@
     keys.push(Backbone.fetchCache.getCacheKey(model, options));
 
     // If this model has a collection, also try to delete the cache for that
+    // even if the collection holds no attributes, the fact that they
+    // may have changed mean the result of collection parameters may not contain 
+    // the model anymore, hence the need to poll the server
     if (!!collection) {
       keys.push(Backbone.fetchCache.getCacheKey(collection));
     }
@@ -264,7 +290,14 @@
     if (data) {
       expired = data.expires;
       expired = expired && data.expires < (new Date()).getTime();
-      attributes = data.value;
+      if (Backbone.fetchCache.cacheModels) {
+          attributes = [];
+          _.each(data.value, function(model_cache_key) {
+            attributes.push(Backbone.fetchCache._cache[model_cache_key].value);
+          });
+      } else {
+        attributes = data.value;
+      }
     }
 
     if (!expired && (opts.cache || opts.prefill) && attributes) {
@@ -306,6 +339,7 @@
   Backbone.fetchCache.clearItem = clearItem;
   Backbone.fetchCache.setLocalStorage = setLocalStorage;
   Backbone.fetchCache.getLocalStorage = getLocalStorage;
+  Backbone.fetchCache.cacheModels = false;
 
   return Backbone;
 }));

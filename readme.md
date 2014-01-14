@@ -14,6 +14,23 @@ The local cache is persisted in `localStorage` if available for faster initial p
 
 The `prefill` option allows for models and collections to be filled with cache data just until the `fetch` operations are complete -- a nice way to make the app feel snappy on slower connections.
 
+## Collections & Models caching
+
+By default, individual models and collections, are each stored independently, even if a collection may contain items also cached as models.
+
+If you wish to save localStorage space, and every collection of your data contains 
+cachable models, you can chose to cache only `keys` in collection cache, and have each 
+corresponding model stored individually.
+
+That way, fetching a single model will hit the cache instead of occuring a new network call.
+
+To activate, set `Backbone.fetchCache.cacheModels` to `true` :
+
+```js
+Backbone.fetchCache.cacheModels = true;
+```
+
+
 ## What's wrong with browser caching for AJAX responses?
 Nothing. This plugin is primarily for working with an API where you don't have control over response cache headers.
 
